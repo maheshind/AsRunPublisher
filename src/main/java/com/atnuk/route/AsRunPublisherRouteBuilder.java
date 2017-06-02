@@ -22,7 +22,7 @@ public class AsRunPublisherRouteBuilder extends RouteBuilder {
 	 * 
 	 * @see org.apache.camel.builder.RouteBuilder#configure()
 	 */
-	//
+	
 	@Override
 	public void configure() throws Exception {
 		from("file://{{oasys.asrun.out}}?scheduler=quartz2&scheduler.cron={{oasys.asrun.movecron}}&filter=#filterOldTXTFiles&readLock=changed&delay=3000&move={{oasys.asrun.archive}}&sortBy=file:name")
