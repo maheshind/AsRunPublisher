@@ -22,6 +22,7 @@ public class AsRunPublisherRouteBuilder extends RouteBuilder {
 	 * 
 	 * @see org.apache.camel.builder.RouteBuilder#configure()
 	 */
+	//
 	@Override
 	public void configure() throws Exception {
 		from("file://{{oasys.asrun.out}}?scheduler=quartz2&scheduler.cron={{oasys.asrun.movecron}}&filter=#filterOldTXTFiles&readLock=changed&delay=3000&move={{oasys.asrun.archive}}&sortBy=file:name")
@@ -33,7 +34,7 @@ public class AsRunPublisherRouteBuilder extends RouteBuilder {
 				.routeId("CurrentFile").log(LoggingLevel.INFO, "Copying AsRun file ${file:name}")
 				.transform(method("BroadcastDaySplitter", "splitMessage")).split(body())
 				.to("file://{{asrunpublisher.asrun.in}}?fileExist=append");
-
+		
 		from("file://{{asrunpublisher.asrun.in}}?scheduler=quartz2&scheduler.cron={{asrunpublisher.asrun.cron}}&include=.*.txt&readLock=changed")
 				.routeId("AsRunProcessor").log(LoggingLevel.INFO, "Starting to process ${file:name}")
 				.setHeader("EMSFILE").method(formEMSFileName, "getEMSROFileName")
