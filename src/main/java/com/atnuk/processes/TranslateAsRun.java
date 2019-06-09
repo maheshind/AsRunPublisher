@@ -5,7 +5,11 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.file.GenericFile;
@@ -34,8 +38,8 @@ public class TranslateAsRun {
 		if (list.size() > 1) {
 			File asRunFile = (File) list.get(0).getFile();
 			File emsROFile = (File) list.get(1).getFile();
-			File emsAsRunFile = new File("temp");;
-
+			File emsAsRunFile = new File("temp");
+			
 			char asRunFileDelimiter = '\t';
 			char emsFileDelimiter = ',';
 			char quote = '^';
@@ -43,11 +47,13 @@ public class TranslateAsRun {
 
 			List<String[]> asRunEvents;
 			List<String[]> emsRunningOrder;
+			Map<String,String> genres = new HashMap<String,String>();
 			List<String[]> tmpemsAsRunEvents = new ArrayList<String[]>();
 			List<String[]> emsAsRunEvents = new ArrayList<String[]>();
+			List<String[]> emsAsRunEventsWithProgID = new ArrayList<String[]>();
 			List<String> emsAsRunEvent;
-
-			System.out.println(ex.getIn().getHeaders());
+			List<String> emsAsRunEventWithProgID;
+			Map<String,String> progID = new HashMap<String,String>();
 
 			CSVReader reader;
 			CSVWriter writer;
@@ -59,7 +65,7 @@ public class TranslateAsRun {
 				reader = new CSVReader(new FileReader(emsROFile), emsFileDelimiter, quote, doubleQuote, 4,false);
 				emsRunningOrder = reader.readAll();
 				reader.close();
-
+							
 				Predicate<String[]> filterPlayEvents = events -> !(events[2].equals("Play"));
 				asRunEvents.removeIf(filterPlayEvents);
 
@@ -77,7 +83,6 @@ public class TranslateAsRun {
 						emsAsRunEvent.add(" ");
 						emsAsRunEvent.add(dateTimeUtils.Timehhmmss(oaEvent[0]));
 						emsAsRunEvent.add(dateTimeUtils.Timehhmmss(nextEvent[0]));
-
 						tmpemsAsRunEvents.add(emsAsRunEvent.toArray(new String[0]));
 					} else if (emsRunningOrderEvent.isAdvert(oaEvent, emsRunningOrder)) {
 						emsAsRunEvent.add("2");
@@ -90,6 +95,8 @@ public class TranslateAsRun {
 						tmpemsAsRunEvents.add(emsAsRunEvent.toArray(new String[0]));
 					}
 				}
+				
+				//group program parts together
 				int noofEMSAsRunEvents = tmpemsAsRunEvents.size();
 				for (int i = 0; i < noofEMSAsRunEvents; i++) {
 					String[] tempEvent = tmpemsAsRunEvents.get(i);
@@ -99,21 +106,45 @@ public class TranslateAsRun {
 					}
 					if (tempEvent[0].equals("3") && nextEvent[0].equals("3") && tempEvent[1].equals(nextEvent[1])) {
 						nextEvent[4] = tempEvent[4];
-						
+							progID.put(tempEvent[1].toString(), ex.getIn().getHeader("TXDate").toString().concat(String.format("%04d", i)));
+					} else if (tempEvent[0].equals("3")) {
+						progID.put(tempEvent[1].toString(), ex.getIn().getHeader("TXDate").toString().concat(String.format("%04d", i)));
+						emsAsRunEvents.add(tempEvent);
 					} else {
 						emsAsRunEvents.add(tempEvent);
 					}
+					
 				}
+				
+				//add unique id for program events 
+				//to-do build KV pair Program name and ID and add it to list that is written to file
+				noofEMSAsRunEvents = emsAsRunEvents.size();
+				int newsCount =1;				
+				for (int i = 0; i < noofEMSAsRunEvents; i++) {
+					String[] tempEvent = emsAsRunEvents.get(i);
+					emsAsRunEventWithProgID = new ArrayList<>();
+					emsAsRunEventWithProgID.addAll(Arrays.asList(tempEvent));
+					if (tempEvent[0].equals("3") && tempEvent.length==6) {
+						if (tempEvent[1].toString().contains("ATN NEWS")) {
+							emsAsRunEventWithProgID.add(ex.getIn().getHeader("TXDate").toString().concat(String.format("AN%02d", newsCount)));
+							newsCount++;
+						}else {
+							emsAsRunEventWithProgID.add(progID.get(tempEvent[1]));	
+						}
+					}
+					emsAsRunEventsWithProgID.add(emsAsRunEventWithProgID.toArray(new String[0]));
+				}
+				
+				
 				String creationDate =  new SimpleDateFormat("yyyyMMdd").format(System.currentTimeMillis());
 				String creationTime =  new SimpleDateFormat("HHmmss").format(System.currentTimeMillis());
 				String[] headerEvent = {"1", ex.getIn().getHeader("TXDate").toString(), ex.getIn().getHeader("ChannelName").toString(), creationDate, creationTime};
-				emsAsRunEvents.add(0, headerEvent);
+				emsAsRunEventsWithProgID.add(0, headerEvent);
 				
-//				writer = new CSVWriter(new FileWriter(emsAsRunFile),';');
 				writer = new CSVWriter(new FileWriter(emsAsRunFile),';', CSVWriter.NO_QUOTE_CHARACTER, 
 					    CSVWriter.NO_ESCAPE_CHARACTER, 
 					    System.getProperty("line.separator"));
-				writer.writeAll(emsAsRunEvents,false);
+				writer.writeAll(emsAsRunEventsWithProgID,false);
 				writer.close();
 				ex.getIn().setBody(emsAsRunFile);
 			} catch (Exception e1) {

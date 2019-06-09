@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.impl.DefaultMessage;
@@ -22,7 +23,7 @@ public class BroadcastDaySplitter {
 	
 	public Iterator<Message> splitMessage(Exchange exchange) {
 		BufferedReader inputReader = exchange.getIn().getBody(BufferedReader.class);
-
+		
 		List<Message> messages = new ArrayList<Message>();
 		String asRunEvent = null;
 		StringBuffer previousDayEvents = new StringBuffer();
@@ -43,9 +44,9 @@ public class BroadcastDaySplitter {
 			previousDay = dateTimeUtils.SubtractDay(currentDay);
 			//messages.add(createNewOutput(previousDayEvents, asRunFileName.replace(currentDay, previousDay)));
 			if (!exchange.getFromRouteId().equals("CurrentFile")) {
-				messages.add(createNewOutput(currentDayEvents, asRunFileName));
+				messages.add(createNewOutput(currentDayEvents, asRunFileName,exchange.getContext()));
 			}else if (exchange.getFromRouteId().equals("CurrentFile")) {
-				messages.add(createNewOutput(previousDayEvents, asRunFileName.replace(currentDay, previousDay)));
+				messages.add(createNewOutput(previousDayEvents, asRunFileName.replace(currentDay, previousDay),exchange.getContext()));
 			}
 			
 			previousDayEvents = new StringBuffer();
@@ -58,8 +59,9 @@ public class BroadcastDaySplitter {
 		return messages.iterator();
 	}
 
-	private Message createNewOutput(StringBuffer sb, String fileName) throws EOFException {
-		Message message = new DefaultMessage();
+	private Message createNewOutput(StringBuffer sb, String fileName, CamelContext context) throws EOFException {
+		//Message message = new DefaultMessage();
+		Message message = new DefaultMessage(context);
 		message.setBody(sb.toString());
 		message.setHeader(Exchange.FILE_NAME, fileName);
 		return message;
